@@ -11,13 +11,13 @@ var
   accept: seq[bool]
 
 proc link(a: int, b: int , c : int) =
-  echo "link", a, "-", c, "->", b
   var id {.global.} = 1
   E.add((b, head[a], c))
   head[a] = id
   id += 1
 
-proc epsilon_closure(s : seq[int]) : seq[int] = # set is limited, so I don't use it
+proc epsilon_closure(s : seq[int]) : seq[int] = # O(nm)
+  # set is limited, so I don't use it
   var
     s_new = s
     p = 0
@@ -31,10 +31,10 @@ proc epsilon_closure(s : seq[int]) : seq[int] = # set is limited, so I don't use
         marked[E[j].to] = true
       j = E[j].next
     p += 1
-  echo "epsilon_closure(", s, ") = ", sorted(s_new)
+  #echo "epsilon_closure(", s, ") = ", sorted(s_new)
   sorted(s_new)
 
-proc move(s : seq[int], v : int) : seq[int] =
+proc move(s : seq[int], v : int) : seq[int] = #O(nm)
   assert v != 0
   var s_new = newSeq[int]()
   for i in s:
@@ -43,11 +43,12 @@ proc move(s : seq[int], v : int) : seq[int] =
       if E[j].val == v:
         s_new.add(E[j].to)
       j = E[j].next
-  echo "move(", s, ", ", v, ") = ", sorted(s_new)
+  #echo "move(", s, ", ", v, ") = ", sorted(s_new)
   sorted(s_new)
 
 discard readLine(stdin, line)
-discard scanf(line, "$i $i $i $i", n, m, n_accepting, sigma) # sigma is the size of charset
+discard scanf(line, "$i $i $i $i", n, m, n_accepting, sigma)
+# sigma is the size of charset
 head = newSeq[int](n + 1)
 marked = newSeq[bool](n + 1)
 accept = newSeq[bool](n + 1)
@@ -59,14 +60,16 @@ for i in countup(1, n_accepting):
 for i in countup(1, m):
   var a, b, c : int
   discard readLine(stdin, line)
-  discard scanf(line, "$i $i $i", a, b, c) # we use weight of 0 to represent epsilon_edge
+  discard scanf(line, "$i $i $i", a, b, c)
+  # we use weight of 0 to represent epsilon_edge
   link(a, b, c)
 
 var
-  dStates : seq[seq[int]] = @[epsilon_closure(@[1])] # we take 1 as the starting point
+  dStates : seq[seq[int]] = @[epsilon_closure(@[1])]
+  # we take 1 as the starting point
   i = 0
   f : Table[int, Table[int, int]] = initTable[int, Table[int, int]]()
-while i < dStates.len():
+while i < dStates.len(): # O(n * (2^n) ^ 2 * m * sigma)
   let cur = dStates[i]
   f[i] = initTable[int, int]()
   for j in countup(1, sigma): # 0 represents epsilon
@@ -75,6 +78,8 @@ while i < dStates.len():
         flag = false
         p = 0
     for k in dStates:
+      # There might be someway to improve the performance of judging whether
+      # there's a duplicate set by hashing.
       if k == U:
         f[i][j] = p
         flag = true
@@ -86,10 +91,11 @@ while i < dStates.len():
   i += 1
 
 i = 0
-for j in dStates:
-  echo i, ":",  j, ", accepting: ", any(j, proc(x: int): bool = return accept[x])
+for j in dStates: # O(n*2^n)
+  echo (i + 1), ":",  j, ", accepting: ",
+    any(j, proc(x: int): bool = return accept[x])
   i += 1
 
 for k, v in f.pairs():
   for k1, v1 in v.pairs():
-    echo "f[", k, ", ", k1, "] = ", v1
+    echo "f[", k + 1, ", ", k1, "] = ", v1 + 1
