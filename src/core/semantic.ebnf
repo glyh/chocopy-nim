@@ -1,0 +1,45 @@
+# This is merely EBNF sytax, but you can have optional, kleen closure and
+# positive closure. The ebnf_parse module won't do left-factor algorithm and
+# recursive elimination algorithm for you, so please avoid them.
+
+program -> ( var_def | func_def | class_def )* stmt*
+class_def -> class ID "(" ID ")" : NEWLINE INDENT class_body DEDENT
+class_body -> pass NEWLINE | ( var_def | class_def )+
+func_def -> def ID "(" typed_var ( , typed_var )* ")" ( "->" type )? : NEWLINE
+  INDENT func_body DEDENT
+func_body -> ( global_decl | nonlocal_decl | var_def | func_def )* stmt+
+typed_var -> ID : type
+type -> ID | IDSTRING | [ type ]
+global_decl -> global ID NEWLINE
+nonlocal_decl -> nonlocal ID NEWLINE
+var_def -> typed_var = literal NEWLINE
+stmt -> simple_stmt NEWLINE
+  | if expr : block ( elif expr : block )* ( else : block )?
+  | while expr : block
+  | for ID in exper : block
+simple_stmt -> pass
+  | expr
+  | return expr?
+  | ( target = )+ expr
+block -> NEWLINE INDENT ( stmt )+ DEDENT
+literal -> None | True | False | INTEGER | IDSTRING | STRING
+expr -> cexpr
+  | not expr
+  | expr ( and | or ) expr
+  | expr if expr else expr
+cexpr -> ID # WTF
+  | literal
+  | [ ( expr ( , expr )* )? ]
+  | "(" expr ")"
+  | member_expr
+  | index_expr
+  | member_expr "(" ( expr ( , expr )* )? ")"
+  | ID "(" ( expr ( , expr )* )? ")"
+  | cexpr bin_op cexpr
+  | - cexpr
+bin_op -> + | - | * | // | % | == | != | <= | >= | < | > | is
+member_expr -> cexpr . ID
+index_expr -> cexpr [ expr ]
+target -> ID
+  | member_expr
+  | index_expr
