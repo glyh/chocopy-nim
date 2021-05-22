@@ -7,6 +7,7 @@ var
   n, m, n_accepting, sigma: int
   E : seq[edge] = newSeq[edge](1)
   head : seq[int]
+  marked : seq[bool]
   accept: seq[bool]
 
 proc link(a: int, b: int , c : int) =
@@ -20,12 +21,14 @@ proc epsilon_closure(s : seq[int]) : seq[int] = # set is limited, so I don't use
   var
     s_new = s
     p = 0
+  for i in countup(1, n): marked[i] = false
+  for i in s: marked[i] = true
   while p < s_new.len():
     var j: int = head[s_new[p]]
     while j != 0:
-      if E[j].val == 0 and
-         all(s_new, proc (x: int): bool = return x != E[j].to):
+      if E[j].val == 0 and not marked[E[j].to]:
         s_new.add(E[j].to)
+        marked[E[j].to] = true
       j = E[j].next
     p += 1
   echo "epsilon_closure(", s, ") = ", sorted(s_new)
@@ -46,6 +49,7 @@ proc move(s : seq[int], v : int) : seq[int] =
 discard readLine(stdin, line)
 discard scanf(line, "$i $i $i $i", n, m, n_accepting, sigma) # sigma is the size of charset
 head = newSeq[int](n + 1)
+marked = newSeq[bool](n + 1)
 accept = newSeq[bool](n + 1)
 for i in countup(1, n_accepting):
   var a : int
