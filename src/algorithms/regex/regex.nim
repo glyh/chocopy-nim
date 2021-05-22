@@ -91,7 +91,7 @@ proc parseRegex(input : string) : Regex =
     tokens : seq[Token] = @[]
     needConcat: bool = false
 
-    meet: lastWitnessCharset = mnothing
+    meet: lastWitnessCharset = mnothing # Dealing with charset
     lastChar: char = '\0'
     inCharset = false
     curCharset : set[char] = {}
@@ -158,7 +158,6 @@ proc parseRegex(input : string) : Regex =
         needConcat = true
       elif i == '[':
         meet = mnothing
-        lastChar = '\0'
         inCharset = true
         curCharset = {}
       elif i == '.':
@@ -169,10 +168,6 @@ proc parseRegex(input : string) : Regex =
         if needConcat: tokens.add(Operator(ttype: operator, otype: opConcat))
         tokens.add(Literal(ttype: literal, value: i))
         needConcat = true
-  #literal, operator, charset, lbracket, rbracket
-  #for i in tokens:
-  #  echo i.ttype
-
   for i in tokens:
     case i.ttype:
       of literal, charset, wildcard:
@@ -197,7 +192,6 @@ proc parseRegex(input : string) : Regex =
           eliminate()
         discard tokenStack.pop()
   return Regex(expressionTree: nodeStack.pop())
-
 
 var input: string
 discard readLine(stdin, input)
