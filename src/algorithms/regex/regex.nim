@@ -117,14 +117,10 @@ proc dp(t: Node, r: var Regex) =
   if t.left != nil: dp(t.left, r)
   if t.right != nil: dp(t.right, r)
   case t.value.ttype:
-    of literal, charset, wildcard:
+    of literal, charset, wildcard, accept:
       t.firstpos = @[t.value.pos]
       t.lastpos = @[t.value.pos]
       t.nullable = false
-    of accept:
-      t.firstpos = @[t.value.pos]
-      t.lastpos = @[t.value.pos]
-      t.nullable = true
     of operator:
       let op = cast[Operator](t.value)
       case op.otype:

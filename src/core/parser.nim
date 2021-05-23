@@ -1,8 +1,7 @@
-import os
+import os, ebnf/core
 
 proc parse(path: string) =
   discard
-
 
 proc init() =
   discard

@@ -2,6 +2,9 @@
 # positive closure. The ebnf_parse module won't do left-factor algorithm and
 # recursive elimination algorithm for you, so please avoid them.
 
+# Keywords to treated as primitive:
+# NEWLINE, INDENT, DEDENT, ID, IDSTRING
+
 program -> ( var_def | func_def | class_def )* stmt*
 class_def -> class ID "(" ID ")" : NEWLINE INDENT class_body DEDENT
 class_body -> pass NEWLINE | ( var_def | class_def )+
@@ -37,7 +40,7 @@ cexpr -> ID # WTF
   | ID "(" ( expr ( , expr )* )? ")"
   | cexpr bin_op cexpr
   | - cexpr
-bin_op -> + | - | * | // | % | == | != | <= | >= | < | > | is
+bin_op -> "+" | - | "*" | // | % | == | != | <= | >= | < | > | is
 member_expr -> cexpr . ID
 index_expr -> cexpr [ expr ]
 target -> ID
