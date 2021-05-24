@@ -1,9 +1,12 @@
 # This is merely EBNF sytax, but you can have optional, kleen closure and
-# positive closure. The ebnf_parse module won't do left-factor algorithm and
-# recursive elimination algorithm for you, so please avoid them.
+# positive closure. You can use 'nil' to refer to epsilon instead. The
+# ebnf_parse module won't do left-factor algorithm and recursive elimination
+# algorithm for you, so please avoid them.
+
+# Notice: nonterminal "success" is preserved for guranteeing the automata works.
 
 # Keywords to treated as primitive:
-# NEWLINE, INDENT, DEDENT, ID, IDSTRING
+# NEWLINE, INDENT, DEDENT, INTEGER, ID, IDSTRING, STRING
 
 program -> ( var_def | func_def | class_def )* stmt*
 class_def -> class ID "(" ID ")" : NEWLINE INDENT class_body DEDENT

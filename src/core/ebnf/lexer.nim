@@ -1,5 +1,7 @@
-import os, streams, logging, re, strformat, json, sequtils, tables, sets, strutils
-import definition
+import
+  os, streams, logging, re, strformat, json, sequtils, tables, sets,
+  strutils,
+  definition
 var logger = newConsoleLogger()
 
 proc read(path: string) : seq[Token] =
@@ -19,6 +21,7 @@ proc read(path: string) : seq[Token] =
           for t, pattern in tokenPattern.items():
             let matchedLength = matchLen(line, pattern, p)
             let ty = t
+            assert ty != ttAccept
             if matchedLength != -1:
               case ty:
                 of ttWhiteSpace: discard
@@ -26,6 +29,8 @@ proc read(path: string) : seq[Token] =
                 of ttTerminal, ttNonterminal, ttWords:
                   add(output, Token(ttype: ty, line: lineNumber,
                       value: line[p ..< p + matchedLength]))
+                of ttNil:
+                  add(output, Token(ttype: ty, line: lineNumber))
                 of ttOperator:
                   add(output, Token(ttype: ttOperator,
                                     line: lineNumber,

@@ -1,39 +1,71 @@
-import re, tables, json, sets, strformat
+import re, tables, sets, strformat, hashes
 type
   TokenType* = enum
-    ttWhiteSpace, ttCommentHead, ttWords,
-    #[ Sometimes, it's not possible to distinguish terminals and nonterminals
-       while scanning ]#
-    ttTerminal, ttNonterminal, ttProduce #[ -> ]#, ttLBracket, #[ ( ]#
-    ttRBracket #[ ) ]#, ttNewline, ttNil #[ nil ]#, ttAccept, ttOperator
-    #ttOr #[ | ]#, ttOptional #[ ? ]# ttKleen #[ * ]#, ttPositive #[ + ]#
+    # These are eliminated after scanning
+    ttWhiteSpace
+    ttCommentHead
+    ttWords #[ Sometimes, it's not possible to distinguish
+               terminals and nonterminals while scanning ]#
+    ttNewline
+    ttProduce #[ -> ]#
+
+    # These really mathes the input codes
+    ttTerminal
+    ttNonterminal
+    ttNil
+
+    # These are provided to improve the expressiveness of EBNF
+    ttLBracket #[ ( ]#
+    ttRBracket #[ ) ]#
+    ttOperator
+
+    # These are for parsing
+    ttStart
+    ttAccept # or, endmark
+  SymbolType* = enum
+    sTerminal
+    sNonterminal
+    sAccept # endmark
   OperatorType* = enum
     opOr, opOptional, opKleen, opPositive, opConcat
+  firstSetStatusType* = enum
+    fsUncalculated, fsCalculated, fsCalculating
     # |, ?, *, + (concat correspond to nothing)
   Token* = object
     line*: int
     case ttype*: TokenType:
+      of ttAccept, ttStart, ttNil:
+        pos1: int
       of ttTerminal, ttNonterminal, ttWords:
+        pos2: int
         value*: string
-        pos*: int
       of ttOperator:
         otype*: OperatorType
       else: discard
-  SemanticRule* = object
+  Symbol* = object
+    case stype*: SymbolType:
+      of sTerminal:
+        value*: string
+      of sNonterminal:
+        id*: int
+      of sAccept: discard
+  SemanticRule* = ref object
     lhs*: Token
     rhs*: seq[Token]
     expressionTree*: Node
-    posCount*: int
+    posCount*: int # index: 1..posCount
     followPos*: seq[HashSet[int]]
-    #closure*: seq[tuple[rule: SemanticRule, pos: int]]
-    #goto*: seq[tuple[rule: SemanticRule, pos: int]]
-  #[
-    NonterminalProperty* = object
-      nextPos*: seq[Token]
-      firstPos*: seq[Token]
-      lastPos*: seq[Token]
-  ]#
-  LR1Item* = object
+    posMap*: seq[int]
+    firstSet*: HashSet[Symbol]
+    firstSetStatus*: firstSetStatusType
+    id*: int
+  LR1Item* = tuple[ruleId: int, dotPos: int, lookahead: Symbol]
+  LR1State* = ref object
+    kernal*: HashSet[LR1Item]
+    closure*: HashSet[LR1Item]
+    goto*: TableRef[Symbol, int]
+  LR1Automata* = object
+    states*: seq[LR1State]
   Node* = ref object
     left*, right*: Node
     nullable*: bool
@@ -48,12 +80,12 @@ const
                opOptional: true, opKleen: true,  opPositive: true }.toTable()
   operatorMap* = { '|' : opOr, '?' : opOptional,
                    '*' : opKleen, '+' : opPositive}.toTable()
-#assert operatorMap['|'] == opOr
+
 let
   tokenPattern* = {
     ttWhiteSpace: re("( |\t)+"),
     ttCommentHead: re("#"),
-    ttNil: re("(?![a-zA-Z_])nil(?![a-zA-Z_])"),
+    ttNil: re("(?<![A-Za-z_])nil(?![A-Za-z_])"),
     ttWords: re("[A-Za-z_]+"),
     ttProduce : re("->"),
     ttLBracket: re("\\("),
@@ -63,26 +95,54 @@ let
     ttTerminal: re("\"(\\.|[^\"\\\\])*\"|[^ ]+")
     # terminal quoted by "", or anything can't be matched by other patterns
   }
-#[
-    ttWhiteSpace, ttCommentHead, ttWords,
-    ttTerminal, ttNonterminal, ttProduce , ttLBracket,
-    ttRBracket , ttNewline, ttNil , ttAccept
-]#
 
-func toJson*(tokens: seq[Token]): string =
-  $(%* tokens)
+template pos*(t: Token) : int =
+  case t.ttype:
+      of ttAccept, ttNil, ttStart: t.pos1
+      of ttTerminal, ttNonterminal, ttWords: t.pos2
+      else:
+        raise newException(
+          ValueError,
+          "Attempted to access a non existant field 'pos' for type Token")
+
+template `pos=`*(t: Token, val: int) =
+  case t.ttype:
+      of ttAccept, ttNil, ttStart: t.pos1 = val
+      of ttTerminal, ttNonterminal, ttWords: t.pos2 = val
+      else:
+        raise newException(
+          ValueError,
+          "Attempted to set a non existant field 'pos' for type Token")
+
+template `==`*(lhs: Symbol, rhs: Symbol): bool =
+  lhs.stype == rhs.stype and
+  (case lhs.stype:
+    of sTerminal: lhs.value == rhs.value
+    of sNonterminal: lhs.id == rhs.id
+    else: true)
+
+func hash*(t: Symbol): Hash =
+  var h: Hash = hash(ord(t.stype))
+  case t.stype:
+    of sTerminal:
+      h = h !& hash(t.value)
+    of sNonterminal:
+      h = h !& hash(t.id)
+    of sAccept: discard
+  !$h
 
 func formatToken*(t: Token): string =
   case t.ttype:
     of ttTerminal, ttNonterminal, ttWords:
-      return fmt"[{t.ttype}, line: {t.line}, value: {t.value}, pos: {t.pos}]"
+      fmt"[{t.ttype}, line: {t.line}, value: {t.value}, pos: {t.pos}]"
+    of ttAccept, ttNil, ttStart:
+      fmt"[{t.ttype}, line: {t.line}, pos: {t.pos}]"
     of ttOperator:
-      return fmt"[{t.ttype}, line: {t.line}, operator: {t.otype}]"
+      fmt"[{t.ttype}, line: {t.line}, operator: {t.otype}]"
     else:
-      return fmt"[{t.ttype}, line: {t.line}]"
+      fmt"[{t.ttype}, line: {t.line}]"
 
-proc postOrder*(t: Node) =
+func postOrder*(t: Node): string =
   if t != nil:
-    postOrder(t.left)
-    postOrder(t.right)
-    stdout.write(formatToken(t.value), " ")
+    postOrder(t.left) & postOrder(t.right) & formatToken(t.value) & " "
+  else: ""

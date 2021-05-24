@@ -1,5 +1,7 @@
-import os, tables
-import definition, lexer, parser
+import
+  os, tables,
+  definition, lexer, parser
+export definition
 
 proc build(path: string) =
   var
@@ -7,17 +9,31 @@ proc build(path: string) =
     meetProduction = false
     lhs: Token
     rhs: seq[Token] = @[]
-    semanticRules = newTable[string, SemanticRule]()
+    semanticRules :seq[SemanticRule] = @[]
+    nonterminalMap = newTable[string, int]()
+    id = 1
+
+  var meetFirstRule = false
+
+  proc tryProduce() =
+    if meetProduction:
+      meetProduction = false
+      if not meetFirstRule:
+        meetFirstRule = true
+        semanticRules.add(SemanticRule(
+          lhs: Token(ttype: ttNonterminal, value: "success"),
+          rhs: @[lhs]))
+        nonterminalMap["success"] = 0
+      semanticRules.add(SemanticRule(lhs: lhs, rhs: rhs))
+      nonterminalMap[lhs.value] = id
+      rhs = @[]
 
   for i in tokens:
     case i.ttype:
       of ttProduce:
         meetProduction = true
       of ttNewline:
-        if meetProduction:
-          meetProduction = false
-          semanticRules[lhs.value] = parser.parseSemanticRule(lhs, rhs)
-          rhs = @[]
+        tryProduce()
       of ttNonterminal:
         if not meetProduction:
           lhs = i
@@ -25,8 +41,12 @@ proc build(path: string) =
           rhs.add(i)
       else:
         rhs.add(i)
-  if meetProduction:
-    semanticRules[lhs.value] = parser.parseSemanticRule(lhs, rhs)
+    id += 1
+  tryProduce()
+  parseSemanticRule(semanticRules, nonterminalMap)
+
+  for k, v in semanticRules.pairs():
+    echo(k, ": " & postOrder(v.expressionTree))
 
 proc run*() =
   if paramCount() >= 2:
