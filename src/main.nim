@@ -13,8 +13,6 @@ if os.paramCount() >= 1:
       echo "paramCount: ", paramCount()
       for i in 0..paramCount():
         echo i, ": ", paramStr(i)
-    of "parseTest":
-      parser.parseTest()
     else:
       discard
 
