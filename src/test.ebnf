@@ -1,1 +1,2 @@
-program -> ( var_def | func_def | class_def )* stmt*
+S -> C C
+C -> c C | d

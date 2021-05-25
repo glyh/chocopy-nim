@@ -101,7 +101,7 @@ proc preprocess(tokens: seq[Token]) : seq[Token] =
       else: discard
   return tokens
 
-proc parse*(path: string) : seq[Token] =
+proc run*(path: string) : seq[Token] =
   var tokens = read(path)
   if len(tokens) == 0: return @[]
   tokens = preprocess(tokens)

@@ -3,9 +3,9 @@ import
   definition, lexer, parser
 export definition
 
-proc build(path: string) =
+proc build(path: string) : LR1Automata =
   var
-    tokens = lexer.parse(path)
+    tokens = lexer.run(path)
     meetProduction = false
     lhs: Token
     rhs: seq[Token] = @[]
@@ -26,6 +26,7 @@ proc build(path: string) =
         nonterminalMap["success"] = 0
       semanticRules.add(SemanticRule(lhs: lhs, rhs: rhs))
       nonterminalMap[lhs.value] = id
+      id += 1
       rhs = @[]
 
   for i in tokens:
@@ -41,14 +42,13 @@ proc build(path: string) =
           rhs.add(i)
       else:
         rhs.add(i)
-    id += 1
   tryProduce()
-  parseSemanticRule(semanticRules, nonterminalMap)
+  parser.run(semanticRules, nonterminalMap)
 
-  for k, v in semanticRules.pairs():
-    echo(k, ": " & postOrder(v.expressionTree))
+  #for k, v in semanticRules.pairs():
+  #  echo(k, ": " & postOrder(v.expressionTree))
 
 proc run*() =
   if paramCount() >= 2:
     for i in 2 .. paramCount():
-      build(paramStr(i))
+      discard build(paramStr(i))

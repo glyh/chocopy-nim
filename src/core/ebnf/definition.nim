@@ -131,7 +131,7 @@ func hash*(t: Symbol): Hash =
     of sAccept: discard
   !$h
 
-func formatToken*(t: Token): string =
+func `$`*(t: Token): string =
   case t.ttype:
     of ttTerminal, ttNonterminal, ttWords:
       fmt"[{t.ttype}, line: {t.line}, value: {t.value}, pos: {t.pos}]"
@@ -141,8 +141,13 @@ func formatToken*(t: Token): string =
       fmt"[{t.ttype}, line: {t.line}, operator: {t.otype}]"
     else:
       fmt"[{t.ttype}, line: {t.line}]"
+#func `$`*(s: LR1State): string =
+  #let k = if s.kernal == nil: nil else: s.kernal
+  #let c = if s.closure == nil: nil else: s.closure
+  #let g = if s.goto == nil: nil else: s.goto
+  #fmt"[kernal: {s}, closure: {c}, goto: {g}]"
 
 func postOrder*(t: Node): string =
   if t != nil:
-    postOrder(t.left) & postOrder(t.right) & formatToken(t.value) & " "
+    postOrder(t.left) & postOrder(t.right) & $(t.value) & " "
   else: ""

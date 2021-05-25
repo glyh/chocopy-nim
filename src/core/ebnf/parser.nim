@@ -1,8 +1,8 @@
 import
-  tables, sets, strformat,
+  tables, sets, strformat, os,
   definition
 
-proc buildTree(s_original: seq[Token]) : (Node, int, seq[int]) =
+proc buildTree(s_original: var seq[Token]) : (Node, int, seq[int]) =
   # Insert ttStart in the beginning, and ttAccept at the end
   var
     tokenStack: seq[Token]  = @[]
@@ -10,13 +10,15 @@ proc buildTree(s_original: seq[Token]) : (Node, int, seq[int]) =
     posCount = 0
     posMap: seq[int] = @[-1]
     s: seq[Token] = @[]
-  let s_original = @[Token(ttype: ttLBracket, line: s_original[0].line),
-                     Token(ttype: ttStart, line: s_original[0].line)] &
-                   s_original &
-                   @[Token(ttype: ttAccept),
-                     Token(ttype: ttRBracket, line: s_original[^1].line)]
   var needConcat: bool = false
-  for i in s_original:
+  for i in
+    @[Token(ttype: ttLBracket, line: s_original[0].line),
+      Token(ttype: ttStart, line: s_original[0].line),
+      Token(ttype: ttLBracket, line: s_original[0].line)] &
+    s_original &
+    @[Token(ttype: ttRBracket, line: s_original[^1].line),
+      Token(ttype: ttAccept),
+      Token(ttype: ttRBracket, line: s_original[^1].line)] :
     case i.ttype:
       of ttLBracket:
         if needConcat:
@@ -45,16 +47,13 @@ proc buildTree(s_original: seq[Token]) : (Node, int, seq[int]) =
       let tl = nodeStack.pop()
       nodeStack.add(Node(left: tl, right: tr, value: token))
 
-  for pos in s.low..s.high:
-    #echo fmt"Read: {formatToken(i)}"
-    let i = s[pos]
+  for pos, i in s.mpairs:
     case i.ttype:
       of ttNonterminal, ttTerminal, ttNil, ttStart, ttAccept:
         posCount += 1
-        posMap[posCount] = pos
-        var tFix = i
-        tFix.pos = posCount
-        nodeStack.add(Node(left: nil, right: nil, value: tFix))
+        posMap.add(pos)
+        i.pos = posCount
+        nodeStack.add(Node(left: nil, right: nil, value: i))
       of ttOperator:
         let pi: int = opPrecedence[i.otype]
         while tokenStack.len() != 0 and tokenStack[^1].ttype == ttOperator:
@@ -79,19 +78,25 @@ proc buildTree(s_original: seq[Token]) : (Node, int, seq[int]) =
       echo""
       echo "------------------------------------------"
     ]#
+  s_original = s
   (nodeStack.pop(), posCount, posMap)
 
 proc DP(t: Node, r: var SemanticRule) =
-  r.followPos = newSeq[HashSet[int]](r.posCount + 1)
   assert t != nil
   if t.left != nil: DP(t.left, r)
   if t.right != nil: DP(t.right, r)
 
   case t.value.ttype:
-    of ttNonterminal, ttTerminal, ttAccept, ttStart:
+    of ttNonterminal, ttTerminal:
       t.firstPos = [t.value.pos].toHashSet()
       t.lastPos = [t.value.pos].toHashSet()
       t.nullable = false
+    of ttAccept, ttStart:
+      t.firstPos = [t.value.pos].toHashSet()
+      t.lastPos = [t.value.pos].toHashSet()
+      t.nullable = true
+      #if t.value.ttype == ttStart:
+      #  echo "-----", t.firstPos," ",  t.lastPos, " ", t.nullable
     of ttNil:
       t.firstPos = initHashSet[int]()
       t.lastPos = initHashSet[int]()
@@ -134,8 +139,8 @@ proc constructLR1Automata(a: var LR1Automata,
   const acceptSymbol = Symbol(stype: sAccept)
 
   proc constructFirstSet(id: int) =
+    #echo "constructFirstSet: ", rules[id].lhs.value
     var r = rules[id]
-    r.firstSetStatus = fsCalculating
     case r.firstSetStatus:
       of fsCalculated: return
       of fsCalculating:
@@ -143,10 +148,11 @@ proc constructLR1Automata(a: var LR1Automata,
           StackOverflowDefect,
           "Found left recursion at nonterminal: " & r.lhs.value)
       of fsUncalculated:
+        r.firstSetStatus = fsCalculating
         var queue: seq[int] = @[]
         for i in r.followPos[1]: queue.add(i)
         var i = 0
-        while i <  queue.high:
+        while i <= queue.high:
           let nextToken: Token = r.rhs[r.posMap[queue[i]]]
           case nextToken.ttype:
             of ttNonterminal:
@@ -162,7 +168,7 @@ proc constructLR1Automata(a: var LR1Automata,
             else:
               raise newException(
                 FieldDefect,
-                "Invalid Token type for" & formatToken(nextToken))
+                "Invalid Token type for " & $(nextToken))
           i += 1
           if r.expressionTree.nullable:
             r.firstSet.incl(acceptSymbol)
@@ -172,17 +178,23 @@ proc constructLR1Automata(a: var LR1Automata,
 
   for i in rules.low..rules.high:
     constructFirstSet(i)
+  echo "FirstSet constructed"
 
-  proc constructClosure(s: var LR1State) =
-    var q : seq[LR1Item] = @[]
+  proc constructClosure(s: var LR1State,
+                       rules: seq[SemanticRule],
+                       map: TableRef[string, int]) =
+    if s.closure.len != 0: return
+    var q: seq[LR1Item] = @[]
 
-    proc addItem(id: int, dot: int, sym: Symbol) =
+    proc addItem(
+      s: var LR1State, q: var seq[LR1Item], id: int, dot: int, sym: Symbol) =
       let newItem: LR1Item = (ruleId: id, dotPos: dot, lookahead: sym)
-      if not s.kernal.contains(newItem) and
-         not s.closure.contains(newItem):
+      if not s.kernal.contains(newItem) and not s.closure.contains(newItem):
         q.add(newItem)
         s.closure.incl(newItem)
 
+    #echo fmt"Construct closure for: {s.kernal}"
+    s.closure = initHashSet[LR1Item]()
     for i in s.kernal:
       q.add(i)
     var i = 0
@@ -190,39 +202,50 @@ proc constructLR1Automata(a: var LR1Automata,
       let
         cur = q[i]
         r = rules[cur.ruleId]
+      #A -> alpha dot B beta, a
       if cur.dotPos < r.posCount - 1: # Not accepted yet
-        for j in r.followPos[r.posMap[cur.dotPos]]:
+        for j in r.followPos[cur.dotPos]: # j is the position of B
           let nextToken: Token = r.rhs[r.posMap[j]]
           case nextToken.ttype:
             of ttNonterminal:
               let nextRuleId = map[nextToken.value]
-              for k in r.followPos[1]:
+              for k in r.followPos[j]: # k is the position of beta
                 let lookaheadToken: Token = r.rhs[r.posMap[k]]
                 case lookaheadToken.ttype:
                   of ttNonterminal:
                     let id = map[lookaheadToken.value]
                     for i in rules[id].firstSet:
-                      addItem(nextRuleId, 1, i)
+                      addItem(s, q, nextRuleId, 1, i)
+                    #if rules[id].expressionTree.nullable:
+                    #  addItem(s, q, nextRuleId, 1, cur.lookahead)
+                  #of ttAccept: discard
                   else:
-                    addItem(nextRuleId, 1,
+                    addItem(s, q, nextRuleId, 1,
                       case lookaheadToken.ttype:
                         of ttAccept:
-                          Symbol(stype: sAccept)
+                          cur.lookahead
                         of ttTerminal:
                           Symbol(stype: sTerminal, value: lookaheadToken.value)
                         else: raise newException(ValueError,
                           "Illed token examined as item."))
-            of ttTerminal: discard
+            of ttTerminal, ttAccept: discard
             else: assert false
+      i += 1
+    #echo fmt"got: {s.closure}"
 
   var kernalMap = newTable[HashSet[LR1Item], int]()
-  proc constructGoto(s: var LR1State) =
-    var newKernal: Table[Symbol, HashSet[LR1Item]]
+  proc constructGoto(a: var LR1Automata, s_pos: int) =
+    #discard stdin.readLine()
+    var
+      s = a.states[s_pos]
+      newKernal: Table[Symbol, HashSet[LR1Item]]
+
     s.goto = newTable[Symbol, int]()
+    kernalMap[s.kernal] = s_pos
 
     proc constructWith(i: LR1Item) =
       let r = rules[i.ruleId]
-      for j in r.followPos[r.posMap[i.dotPos]]:
+      for j in r.followPos[i.dotPos]:
         let nextToken = r.rhs[r.posMap[j]]
         let newItem = (ruleId: i.ruleId, dotPos: j, lookahead: i.lookahead)
         case nextToken.ttype:
@@ -241,29 +264,54 @@ proc constructLR1Automata(a: var LR1Automata,
 
     for i in s.kernal: constructWith(i)
     for i in s.closure: constructWith(i)
-    for k, v in newKernal.mpairs:
+    for k, v in newKernal.pairs:
       if kernalMap.hasKey(v):
         s.goto[k] = kernalMap[v]
       else:
         a.states.add(LR1State(kernal: v))
         s.goto[k] = a.states.high
+        kernalMap[v] = a.states.high
 
-  var initialState = LR1State(kernal: @[(ruleId: 0, dotPos: 0, lookahead: acceptSymbol)].toHashSet())
-  constructClosure(initialState)
+  var initialState = LR1State(
+    kernal: [(ruleId: 0, dotPos: 1, lookahead: acceptSymbol)].toHashSet())
   a.states.add(initialState)
   var i = 0
-  while i < a.states.high:
-    constructGoto(a.states[i])
+  while i <= a.states.high:
+    constructClosure(a.states[i], rules, map)
+    constructGoto(a, i)
     i += 1
 
-proc parseSemanticRule*(rules: var seq[SemanticRule],
-                        map: TableRef[string, int]) =
+proc run*(rules: var seq[SemanticRule], map: TableRef[string, int]) : LR1Automata =
   var id = 1
-  for k, r in rules.mpairs:
+  for r in rules.mitems:
     r.id = id
     (r.expressionTree, r.posCount, r.posMap) = buildTree(r.rhs)
+    r.followPos = newSeq[HashSet[int]](r.posCount + 1)
     DP(r.expressionTree, r)
     r.firstSetStatus = fsUncalculated
-    id += 1
+    #-------------------------
+    #[
+      stdout.write(formatToken(r.lhs), " -> ")
+      for i in r.rhs:
+        stdout.write(formatToken(i), " ")
+      echo""
+      echo fmt"posCount: {r.posCount}, size of posMap: {r.posMap.len()}"
+      for i in 1..r.posCount:
+        stdout.write fmt"{i}: {r.followPos[i]}:"
+        for j in r.followPos[i]:
+          stdout.write(r.rhs[r.posMap[j]].formatToken(), " ")
+        echo""
+      id += 1
+      echo "============================"
+    ]#
+    #-------------------------
   var a: LR1Automata
   constructLR1Automata(a, rules, map)
+  #[
+    for k, s in a.states.pairs:
+      echo k, ": ", s.kernal
+    for id, s in a.states.pairs:
+      for k, v in s.goto:
+        echo fmt"F[{id}][{k}] = {v}"
+  ]#
+  a
