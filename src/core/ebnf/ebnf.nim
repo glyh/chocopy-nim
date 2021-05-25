@@ -1,9 +1,9 @@
 import
   os, tables,
   definition, lexer, parser
-export definition
+export SymbolType, Symbol, LR1ActionType, LR1Action, LR1State, LR1Automata
 
-proc build(path: string) : LR1Automata =
+proc build*(path: string) : LR1Automata =
   var
     tokens = lexer.run(path)
     meetProduction = false

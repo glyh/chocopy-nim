@@ -178,7 +178,7 @@ proc constructLR1Automata(a: var LR1Automata,
 
   for i in rules.low..rules.high:
     constructFirstSet(i)
-  echo "FirstSet constructed"
+  #echo "FirstSet constructed"
 
   proc constructClosure(s: var LR1State,
                        rules: seq[SemanticRule],
@@ -216,9 +216,6 @@ proc constructLR1Automata(a: var LR1Automata,
                     let id = map[lookaheadToken.value]
                     for i in rules[id].firstSet:
                       addItem(s, q, nextRuleId, 1, i)
-                    #if rules[id].expressionTree.nullable:
-                    #  addItem(s, q, nextRuleId, 1, cur.lookahead)
-                  #of ttAccept: discard
                   else:
                     addItem(s, q, nextRuleId, 1,
                       case lookaheadToken.ttype:
@@ -235,7 +232,6 @@ proc constructLR1Automata(a: var LR1Automata,
 
   var kernalMap = newTable[HashSet[LR1Item], int]()
   proc constructGoto(a: var LR1Automata, s_pos: int) =
-    #discard stdin.readLine()
     var
       s = a.states[s_pos]
       newKernal: Table[Symbol, HashSet[LR1Item]]
@@ -243,7 +239,7 @@ proc constructLR1Automata(a: var LR1Automata,
     s.goto = newTable[Symbol, int]()
     kernalMap[s.kernal] = s_pos
 
-    proc constructWith(i: LR1Item) =
+    for i in s.kernal + s.closure:
       let r = rules[i.ruleId]
       for j in r.followPos[i.dotPos]:
         let nextToken = r.rhs[r.posMap[j]]
@@ -262,8 +258,6 @@ proc constructLR1Automata(a: var LR1Automata,
             newKernal[sym].incl(newItem)
           else: raise newException(ValueError , "Illed token examined as item.")
 
-    for i in s.kernal: constructWith(i)
-    for i in s.closure: constructWith(i)
     for k, v in newKernal.pairs:
       if kernalMap.hasKey(v):
         s.goto[k] = kernalMap[v]
@@ -272,16 +266,65 @@ proc constructLR1Automata(a: var LR1Automata,
         s.goto[k] = a.states.high
         kernalMap[v] = a.states.high
 
+  proc constructAction(curState: var LR1State) =
+    proc tryAddAction(state: var LR1State, sym: Symbol, action: LR1Action) =
+      if state.action.hasKey(sym):
+        let actionAlready = state.action[sym]
+        if not (actionAlready == action):
+          raise newException(ValueError,
+            fmt"Conflict in LR(1) dectected between {actionAlready} " &
+            "and {action} for transition {sym} in state {state.kernal}")
+      else:
+        state.action[sym] = action
+    curState.action = newTable[Symbol, LR1Action]()
+    for k in (curState.kernal + curState.closure):
+      let r = rules[k.ruleId]
+      for j in r.followPos[k.dotPos]:
+        let tok = r.rhs[r.posMap[j]]
+        case tok.ttype:
+          of ttTerminal:
+            tryAddAction(
+              curState,
+              Symbol(stype: sTerminal, value: tok.value),
+              LR1Action(lraType: lr1Shift))
+          of ttNonterminal:
+            tryAddAction(
+              curState,
+              Symbol(stype: sNonterminal, id: map[tok.value]),
+              LR1Action(lraType: lr1Shift))
+          of ttAccept:
+            tryAddAction(
+              curState,
+              k.lookahead,
+              if k.ruleId == 0:
+                LR1Action(lraType: lr1Accept)
+              else:
+                LR1Action(lraType: lr1Reduce, ruleId: k.ruleId))
+          else: assert(tok.ttype == ttNonterminal)
+
+  proc constructMark(curState: LR1State) =
+    curState.isHead = initHashSet[int]()
+    curState.isBody = initHashSet[int]()
+    for i in (curState.kernal + curState.closure):
+      if i.dotPos == 1:
+        curState.isHead.incl(i.ruleId)
+      else:
+        curState.isBody.incl(i.ruleId)
+
   var initialState = LR1State(
     kernal: [(ruleId: 0, dotPos: 1, lookahead: acceptSymbol)].toHashSet())
   a.states.add(initialState)
   var i = 0
   while i <= a.states.high:
-    constructClosure(a.states[i], rules, map)
+    var curState = a.states[i]
+    constructClosure(curState, rules, map)
     constructGoto(a, i)
+    constructMark(curState)
+    constructAction(curState)
     i += 1
 
-proc run*(rules: var seq[SemanticRule], map: TableRef[string, int]) : LR1Automata =
+proc run*(rules: var seq[SemanticRule],
+          map: TableRef[string, int]) : LR1Automata =
   var id = 1
   for r in rules.mitems:
     r.id = id
@@ -307,11 +350,12 @@ proc run*(rules: var seq[SemanticRule], map: TableRef[string, int]) : LR1Automat
     #-------------------------
   var a: LR1Automata
   constructLR1Automata(a, rules, map)
-  #[
-    for k, s in a.states.pairs:
-      echo k, ": ", s.kernal
-    for id, s in a.states.pairs:
-      for k, v in s.goto:
-        echo fmt"F[{id}][{k}] = {v}"
-  ]#
+  for k, s in a.states.pairs:
+    echo k, ": ", s.kernal
+  for id, s in a.states.pairs:
+    for k, v in s.goto:
+      echo fmt"F[{id}][{k}] = {v}"
+    for k,v in s.action:
+      echo fmt"Action[{id}][{k}] = {v}"
+    echo fmt"IsHead[{id}] = {s.isHead}"
   a

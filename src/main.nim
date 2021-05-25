@@ -1,6 +1,5 @@
-from os import nil
-from core/lexer import nil
-from core/ebnf/ebnf import nil
+import os
+import core/lexer, core/ebnf/ebnf, core/parser
 
 if os.paramCount() >= 1:
   case os.paramStr(1):
@@ -8,6 +7,14 @@ if os.paramCount() >= 1:
       lexer.run()
     of "ebnf":
       ebnf.run()
+    of "parser":
+      parser.run()
+    of "paramTest":
+      echo "paramCount: ", paramCount()
+      for i in 0..paramCount():
+        echo i, ": ", paramStr(i)
+    of "parseTest":
+      parser.parseTest()
     else:
       discard
 

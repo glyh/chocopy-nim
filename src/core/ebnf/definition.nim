@@ -31,6 +31,8 @@ type
   firstSetStatusType* = enum
     fsUncalculated, fsCalculated, fsCalculating
     # |, ?, *, + (concat correspond to nothing)
+  LR1ActionType* = enum
+    lr1Shift, lr1Reduce, lr1Accept, lr1Error
   Token* = object
     line*: int
     case ttype*: TokenType:
@@ -60,10 +62,22 @@ type
     firstSetStatus*: firstSetStatusType
     id*: int
   LR1Item* = tuple[ruleId: int, dotPos: int, lookahead: Symbol]
+  LR1Action* = object
+    case lraType*: LR1ActionType:
+      of lr1Shift, lr1Accept:
+        discard
+      of lr1Reduce:
+        ruleId*: int
+      of lr1Error:
+        message*: string
   LR1State* = ref object
     kernal*: HashSet[LR1Item]
     closure*: HashSet[LR1Item]
     goto*: TableRef[Symbol, int]
+    action*: TableRef[Symbol, LR1Action]
+    # These to help you reduce (where to end the reduce)
+    isHead*: HashSet[int] # stores ruleId
+    isBody*: HashSet[int] # stores ruleId
   LR1Automata* = object
     states*: seq[LR1State]
   Node* = ref object
@@ -114,12 +128,25 @@ template `pos=`*(t: Token, val: int) =
           ValueError,
           "Attempted to set a non existant field 'pos' for type Token")
 
-template `==`*(lhs: Symbol, rhs: Symbol): bool =
+func `==`*(lhs: Symbol, rhs: Symbol): bool =
   lhs.stype == rhs.stype and
   (case lhs.stype:
     of sTerminal: lhs.value == rhs.value
     of sNonterminal: lhs.id == rhs.id
     else: true)
+
+func `==`*(lhs: LR1Action, rhs: LR1Action): bool =
+  lhs.lraType == rhs.lraType and
+  (case lhs.lraType:
+    of lr1Shift, lr1Accept: true
+    of lr1Reduce: lhs.ruleId == rhs.ruleId
+    of lr1Error: lhs.message == rhs.message)
+
+func `$`*(a: LR1Action): string =
+  case a.lraType:
+    of lr1Shift, lr1Accept: fmt"[{a.lraType}]"
+    of lr1Reduce: fmt"[{a.lraType}, ruleId: {a.ruleId}]"
+    of lr1Error: fmt"[{a.lraType}, errorMessage: {a.message}]"
 
 func hash*(t: Symbol): Hash =
   var h: Hash = hash(ord(t.stype))
