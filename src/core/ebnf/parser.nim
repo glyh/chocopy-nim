@@ -350,12 +350,14 @@ proc run*(rules: var seq[SemanticRule],
     #-------------------------
   var a: LR1Automata
   constructLR1Automata(a, rules, map)
-  for k, s in a.states.pairs:
-    echo k, ": ", s.kernal
-  for id, s in a.states.pairs:
-    for k, v in s.goto:
-      echo fmt"F[{id}][{k}] = {v}"
-    for k,v in s.action:
-      echo fmt"Action[{id}][{k}] = {v}"
-    echo fmt"IsHead[{id}] = {s.isHead}"
+  #[
+    for k, s in a.states.pairs:
+      echo k, ": ", s.kernal
+    for id, s in a.states.pairs:
+      for k, v in s.goto:
+        echo fmt"F[{id}][{k}] = {v}"
+      for k,v in s.action:
+        echo fmt"Action[{id}][{k}] = {v}"
+      echo fmt"IsHead[{id}] = {s.isHead}"
+  ]#
   a

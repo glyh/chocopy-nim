@@ -126,7 +126,8 @@ template `pos=`*(t: Token, val: int) =
       else:
         raise newException(
           ValueError,
-          "Attempted to set a non existant field 'pos' for type Token")
+          fmt"Attempted to set a non existant" &
+          " field 'pos' for type Token(ttype: {t.ttype})")
 
 func `==`*(lhs: Symbol, rhs: Symbol): bool =
   lhs.stype == rhs.stype and

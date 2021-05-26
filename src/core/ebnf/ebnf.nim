@@ -66,8 +66,8 @@ proc run*() =
       defer: close(s)
       var c: char = 'x'
       while c != '\0':
-        echo "Reading another sequence..."
         var
+          input = ""
           curState = 0
           symbolStack: seq[Symbol] = @[]
           stateStack: seq[int] = @[0]
@@ -111,13 +111,16 @@ proc run*() =
 
         while not success:
           c = s.readChar()
+          if not (c in {'\n', '\0'}): input &= c
           if not (tryParse(
-            if not (c in {'\n', '0'}):
-              Symbol(stype: sTerminal, value: $c)
+            if c in {'\n', '0'}:
+              Symbol(stype: sAccept)
             else:
-              Symbol(stype: sAccept))): break
-        echo success
+              Symbol(stype: sTerminal, value: $c))): break
         while not (c in {'\n', '\0'}):
           c = s.readChar()
+          if not (c in {'\n', '\0'}): input &= c
+        if input != "":
+          echo fmt"Whether ""{input}"" valid? ", success
     else:
       logger.log(lvlError, fmt"The input file {paramStr(i)} doesn't exists")

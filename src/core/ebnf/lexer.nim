@@ -88,16 +88,19 @@ proc preprocess(tokens: seq[Token]) : seq[Token] =
       else:
         discard
 
-  for i in countup(0, len(tokens) - 1):
-    case tokens[i].ttype:
+  for i in tokens.mitems:
+    case i.ttype:
       of ttWords:
-        if names.contains(tokens[i].value):
-          tokens[i].ttype = ttNonterminal
-        else:
-          tokens[i].ttype = ttTerminal
+        var t: Token =
+          if names.contains(i.value):
+            Token(ttype: ttNonterminal, line: i.line, value: i.value)
+          else:
+            Token(ttype: ttTerminal, line: i.line, value: i.value)
+        t.pos = i.pos
+        i = t
       of ttTerminal:
-        if tokens[i].value[0] == '"':
-          tokens[i].value = unescape(tokens[i].value)
+        if i.value[0] == '"':
+          i.value = unescape(i.value)
       else: discard
   return tokens
 
