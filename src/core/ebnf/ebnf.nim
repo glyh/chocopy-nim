@@ -25,7 +25,6 @@ proc build*(path: string) : LR1Automata =
       semanticRules.add(SemanticRule(lhs: lhs, rhs: rhs))
       rhs = @[]
 
-  #echo tokens
   for i in tokens:
     case i.ttype:
       of ttProduce:
@@ -41,9 +40,6 @@ proc build*(path: string) : LR1Automata =
         rhs.add(i)
   tryProduce()
   parser.run(semanticRules)
-
-  #for k, v in semanticRules.pairs():
-  #  echo(k, ": " & postOrder(v.expressionTree))
 
 proc run*() =
   # This will directly parse the tokens, treat them as
