@@ -3,7 +3,8 @@
 # ebnf_parse module won't do left-factor algorithm and recursive elimination
 # algorithm for you, so please avoid them.
 
-# Notice: nonterminal "success" is preserved for guranteeing the automata works.
+# Notice: nonterminal named "success" or started with "tmp" are preserved for
+# guranteeing the automata works.
 
 # Keywords to treated as primitive:
 # NEWLINE, INDENT, DEDENT, INTEGER, ID, IDSTRING, STRING

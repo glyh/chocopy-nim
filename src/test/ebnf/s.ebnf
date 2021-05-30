@@ -1,2 +1,2 @@
-S -> C C
-C -> c C | d | p* s
+S -> c (S | C)
+C -> p*

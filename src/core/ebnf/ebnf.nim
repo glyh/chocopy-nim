@@ -11,8 +11,6 @@ proc build*(path: string) : LR1Automata =
     lhs: Token
     rhs: seq[Token] = @[]
     semanticRules :seq[SemanticRule] = @[]
-    nonterminalMap = newTable[string, int]()
-    id = 1
 
   var meetFirstRule = false
 
@@ -24,12 +22,10 @@ proc build*(path: string) : LR1Automata =
         semanticRules.add(SemanticRule(
           lhs: Token(ttype: ttNonterminal, value: "success"),
           rhs: @[lhs]))
-        nonterminalMap["success"] = 0
       semanticRules.add(SemanticRule(lhs: lhs, rhs: rhs))
-      nonterminalMap[lhs.value] = id
-      id += 1
       rhs = @[]
 
+  #echo tokens
   for i in tokens:
     case i.ttype:
       of ttProduce:
@@ -44,7 +40,7 @@ proc build*(path: string) : LR1Automata =
       else:
         rhs.add(i)
   tryProduce()
-  parser.run(semanticRules, nonterminalMap)
+  parser.run(semanticRules)
 
   #for k, v in semanticRules.pairs():
   #  echo(k, ": " & postOrder(v.expressionTree))
@@ -61,10 +57,11 @@ proc run*() =
   echo "LR1 automata built"
   for i in 3 .. paramCount():
     let path = paramStr(i)
+    echo "Verifying " & path
     if fileExists(path):
       var s = newFileStream(path, fmRead)
       defer: close(s)
-      var c: char = 'x'
+      var c: char = '\1'
       while c != '\0':
         var
           input = ""
@@ -81,7 +78,7 @@ proc run*() =
             echo "StateStack: ", stateStack
             echo "============================================"
           ]#
-          let actions = a.states[curState].action
+          let actions = a.states[curState].actions
           if actions.hasKey(sym):
             let action = actions[sym]
             case action.lraType:
@@ -94,20 +91,16 @@ proc run*() =
                 success = true
                 true
               of lr1Reduce:
-                let rid = action.ruleId
-                while stateStack.len() > 0 and
-                  a.states[stateStack[^1]].isBody.contains(rid):
+                for i in 1..action.tokenCount:
                   discard stateStack.pop()
                   discard symbolStack.pop()
-                assert a.states[stateStack[^1]].isHead.contains(rid)
                 curState = stateStack[^1]
-                tryParse(Symbol(stype: sNonterminal, id: rid)) and tryParse(sym)
+                tryParse(action.output) and tryParse(sym)
               of lr1Error:
                 logger.log(lvlError, fmt"the LR1 automata have signalled " &
                   "error: {action.message}")
                 false
-          else:
-            false
+          else: false
 
         while not success:
           c = s.readChar()
@@ -122,5 +115,3 @@ proc run*() =
           if not (c in {'\n', '\0'}): input &= c
         if input != "":
           echo fmt"Whether ""{input}"" valid? ", success
-    else:
-      logger.log(lvlError, fmt"The input file {paramStr(i)} doesn't exists")
