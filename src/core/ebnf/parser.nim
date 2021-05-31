@@ -1,5 +1,5 @@
 import
-  tables, sets, strformat, os, sequtils, sugar,
+  tables, sets, strformat, sequtils, sugar, deques,
   definition
 
 proc buildTree(s_original: var seq[Token]) : Node =
@@ -216,33 +216,6 @@ proc constructLR1Automata(
       r[pos]),
     pos)
 
-  proc constructFirstSet(nonTerminal: string) =
-    var r = rulesDesugared[nonTerminal]
-    case r.firstSetStatus:
-      of fsCalculated: return
-      of fsCalculating:
-        raise newException(
-          StackOverflowDefect,
-          "Found left recursion at nonterminal: " & nonTerminal)
-      of fsUncalculated:
-        r.firstSetStatus = fsCalculating
-        for i in r.rhs:
-          var (sym, j) = lookAhead(i, -1)
-          # sNil is taken care of by lookAhead
-          while sym.stype == sNonterminal and
-                rulesDesugared[sym.value].nullable:
-            constructFirstSet(sym.value);
-            r.firstSet = r.firstSet + rulesDesugared[sym.value].firstSet
-            (sym, j) = lookAhead(i, j)
-          case sym.stype:
-            of sTerminal:
-              r.firstSet.incl(sym)
-            of sNonterminal:
-              constructFirstSet(sym.value)
-              r.firstSet = r.firstSet + rulesDesugared[sym.value].firstSet
-            of sNil: raise newException(FieldDefect, "Impossible value")
-            of sAccept: discard
-        r.firstSetStatus = fsCalculated
 
   proc constructClosure(s: var LR1State,
                        map: TableRef[string, int]) =
@@ -360,12 +333,101 @@ proc constructLR1Automata(
       kernal:
         [(rule: "success", dot: (0, -1), lookahead: acceptSymbol)].toHashSet())
     i = 0
-    map =  newTable[string, int]()
+    map = newTable[string, int]()
+    rmap = newSeq[string](rulesDesugared.len)
     p = 0
   for k in rulesDesugared.keys:
     map[k] = p
-    constructFirstSet(k)
+    rmap[p] = k
     p += 1
+
+  # Using tarjan's algorithm to solve firstSet with left recursion
+  proc constructFirstSets() =
+    type edge = ref object
+      to: int
+      next: edge
+    var
+      head = newSeq[edge](p)
+      head2 = newSeq[edge](p)
+      deg = newSeq[int](p)
+      dfn = newSeq[int](p)
+      tlow = newSeq[int](p)
+      bel = newSeq[int](p)
+      stk: seq[int]
+      queue = initDeque[int]()
+      firstSets = newSeq[HashSet[Symbol]](p)
+
+    var tid = 0
+    proc tarjan(x: int) =
+      dfn[x] = tid
+      tlow[x] = tid
+      stk.add(x)
+      tid += 1
+      var e = head[x]
+      while e != nil:
+        if dfn[e.to] == 0:
+          tarjan(e.to)
+          tlow[x] = min(tlow[x], tlow[e.to])
+        elif bel[e.to] == 0:
+          tlow[x] = min(tlow[x], dfn[e.to])
+        e = e.next
+      if dfn[x] == tlow[x]:
+        while stk[^1] != x:
+          bel[stk.pop()] = x
+        bel[stk.pop()] = x
+
+    proc link1(tfrom: int, to: int) =
+      let e = edge(to: to, next: head[tfrom])
+      head[tfrom] = e
+
+    proc link2(tfrom: int, to: int) =
+      let e = edge(to: to, next: head2[tfrom])
+      head2[tfrom] = e
+      deg[to] += 1
+
+    for k, r in rulesDesugared.pairs:
+      for i in r.rhs:
+        var
+          (sym, j) = lookAhead(i, -1)
+          # sNil is taken care of by lookAhead
+          tFrom = map[k]
+        while sym.stype == sNonterminal and rulesDesugared[sym.value].nullable:
+          link1(map[sym.value], tFrom)
+          (sym, j) = lookAhead(i, j)
+        case sym.stype:
+          of sNonterminal:
+            link1(map[sym.value], tFrom)
+          of sTerminal:
+            r.firstSet.incl(sym)
+          else: discard
+
+    for id in 0..<p:
+      if dfn[id] == 0:
+        tarjan(id)
+    for id in 0..<p:
+      firstSets[bel[id]] = firstSets[bel[id]] + rulesDesugared[rmap[id]].firstSet
+      var e = head[id]
+      while e != nil:
+        link2(bel[id], bel[e.to])
+        e = e.next
+    for id in 0..<p:
+      if bel[id] == id and deg[id] == 0:
+        queue.addLast(id)
+    while queue.len != 0:
+      var
+        cur = queue.popFirst()
+        e = head2[cur]
+      while e != nil:
+        firstSets[e.to] = firstSets[e.to] + firstSets[cur]
+        deg[e.to] -= 1
+        if deg[e.to] == 0:
+          queue.addLast(e.to)
+        e = e.next
+    for id in 0..<p:
+      rulesDesugared[rmap[id]].firstSet = firstSets[bel[id]]
+      echo fmt"firstSet[{rmap[id]}] = {rulesDesugared[rmap[id]].firstSet}"
+
+  constructFirstSets()
   a.states.add(initialState)
   while i <= a.states.high:
     var curState = a.states[i]
@@ -389,12 +451,12 @@ proc run*(rules: var seq[SemanticRule]) : LR1Automata =
     echo rulesDesugared
     if r.expressionTree.meet != rnRewrite:
       rulesDesugared[r.lhs.value] = rulesDesugared[tmpName]
-      rulesDesugared[r.lhs.value].firstSetStatus = fsUncalculated
+      #rulesDesugared[r.lhs.value].firstSetStatus = fsUncalculated
       rulesDesugared.del(tmpName)
     else:
       rulesDesugared[r.lhs.value] =
         SemanticRuleDesugared(
-          firstSetStatus: fsUncalculated,
+          #firstSetStatus: fsUncalculated,
           rhs: @[@[Symbol(stype: sNonterminal, value: tmpName)]],
           nullable: rulesDesugared[tmpName].nullable)
     id += 1

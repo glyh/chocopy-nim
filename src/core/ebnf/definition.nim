@@ -64,7 +64,7 @@ type
   SemanticRuleDesugared* = ref object
     rhs*: seq[seq[Symbol]]
     firstSet*: HashSet[Symbol]
-    firstSetStatus*: firstSetStatusType
+    #firstSetStatus*: firstSetStatusType
     nullable*: bool
 
   RuleNestLevel* = enum

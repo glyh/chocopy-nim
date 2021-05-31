@@ -23,7 +23,7 @@ var_def -> typed_var = literal NEWLINE
 stmt -> simple_stmt NEWLINE
   | if expr : block ( elif expr : block )* ( else : block )?
   | while expr : block
-  | for ID in exper : block
+  | for ID in expr : block
 simple_stmt -> pass
   | expr
   | return expr?
