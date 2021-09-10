@@ -43,25 +43,26 @@ func toOperator(c : char) : OperatorType =
     of '*': return opKleen
     of '?': return opOptional
     else: assert false
+
 func precedence(op: OperatorType) : int =
   case op:
-    of opOr: return 1
-    of opConcat: return 2
-    of opPositive, opOptional, opKleen: return 3
+    of opOr: 1
+    of opConcat: 2
+    of opPositive, opOptional, opKleen: 3
 
 func unary(op: OperatorType) : bool =
   case op:
-    of opOr, opConcat: return false
-    of opPositive, opOptional, opKleen: return true
+    of opOr, opConcat: false
+    of opPositive, opOptional, opKleen: true
 
 func associtive(op : OperatorType) : Associative =
   case op:
-    of opOr, opConcat: return LtoR
-    of opPositive, opOptional, opKleen: return LtoR
+    of opOr, opConcat: LtoR
+    of opPositive, opOptional, opKleen: LtoR
 
 var
-  nodeStack :seq[Node]
-  tokenStack :seq[Token]
+  nodeStack : seq[Node]
+  tokenStack : seq[Token]
 
 proc eliminate() =
   let
@@ -95,7 +96,7 @@ func formatToken(t: Token) : string =
     of wildcard:
       return fmt"[Wildcard: * at {t.pos}]"
     of accept:
-      return fmt "[Accept]"
+      return "[Accept]"
 
 proc postorder(t: Node) =
   if t != nil:
@@ -110,7 +111,6 @@ proc unique[T](s: var seq[T]) =
       continue
     tmp.add(i)
   s = tmp
-
 
 proc dp(t: Node, r: var Regex) =
   assert t != nil
@@ -168,6 +168,9 @@ proc parseToken(input: string) : TokenStream =
   var
     pos = 1
     posMap : seq[Token] = @[Token()]
+    # Stores the index of patterns that really "matches" input string,
+    # like "a", ".", "[0-9]"
+
     escaped = false
     tokens : seq[Token] = @[]
     needConcat: bool = false
@@ -214,6 +217,7 @@ proc parseToken(input: string) : TokenStream =
             meet = mliteral
             lastChar = i
           of mdash:
+            assert i >= lastChar
             for j in lastChar .. i:
               curCharset.incl(j)
             meet = mnothing
@@ -281,12 +285,13 @@ proc buildTree(t: TokenStream) : Regex =
       of rbracket:
         while tokenStack[^1].ttype == operator:
           eliminate()
-        discard tokenStack.pop()
+        discard tokenStack.pop() # pop lbracket
       else: assert false
-  #[echo "builded posMap: "
-  for k, v in t.posMap & @[Token(ttype: accept, pos: t.posCount + 1)]:
-    echo k, formatToken(v)
-  echo "----------"
+  #[
+    echo "built posMap: "
+    for k, v in t.posMap & @[Token(ttype: accept, pos: t.posCount + 1)]:
+      echo k, formatToken(v)
+    echo "----------"
   ]#
   return Regex(expressionTree: Node(left: nodeStack.pop(),
                right: Node(left: nil,
@@ -357,12 +362,12 @@ proc parseRegex(input : string) : Regex =
   let t = parseToken(input)
   var r = buildTree(t)
   r.followpos = newSeq[seq[int]](t.posCount + 2)
-  # [1-n+1], n+1 preserved for the success node
+  # [1..n+1], n+1 preserved for the success node
   dp(r.expressionTree, r)
-  echo "posMap: "
-  for id, v in r.posMap:
-    if id != 0:
-      echo fmt"{id} -> {formatToken(v)}, followpos = {r.followpos[id]}"
+  # echo "posMap: "
+  # for id, v in r.posMap:
+  #   if id != 0:
+  #     echo fmt"{id} -> {formatToken(v)}, followpos = {r.followpos[id]}"
   buildDFA(r)
   echo "DStates(0 is the start state): "
   for id, v in r.DStates:

@@ -75,7 +75,8 @@ proc buildTree(s_original: var seq[Token]) : Node =
   s_original = s
   nodeStack.pop()
 
-# DP takes over the desugar job
+# DP takes over the desugar job,
+# i.e. convert regex in the rhs of semantic rules to pure CFGs
 proc DP(
   t: var Node,
   tag: string,
@@ -229,12 +230,12 @@ proc constructLR1Automata(
       dot: tuple[p: int, q: int],
       sym: Symbol) =
       let newItem: LR1Item = (rule: id, dot: dot, lookahead: sym)
-      if not s.kernal.contains(newItem) and not s.closure.contains(newItem):
+      if not s.kernel.contains(newItem) and not s.closure.contains(newItem):
         q.add(newItem)
         s.closure.incl(newItem)
 
     s.closure = initHashSet[LR1Item]()
-    for i in s.kernal: q.add(i)
+    for i in s.kernel: q.add(i)
     var i = q.low
     while i <= q.high:
       let
@@ -271,15 +272,15 @@ proc constructLR1Automata(
             addItem(s, q, B.value, (i, -1), j)
       i += 1
 
-  var kernalMap = newTable[HashSet[LR1Item], int]()
+  var kernelMap = newTable[HashSet[LR1Item], int]()
   proc constructGoto(a: var LR1Automata, s_pos: int) =
     var
       s = a.states[s_pos]
       newKernal: Table[Symbol, HashSet[LR1Item]]
     s.goto = newTable[Symbol, int]()
-    kernalMap[s.kernal] = s_pos
+    kernelMap[s.kernel] = s_pos
 
-    for i in s.kernal + s.closure:
+    for i in s.kernel + s.closure:
       let
         (symNext, posNext) =
           lookAhead(rulesDesugared[i.rule].rhs[i.dot.p], i.dot.q)
@@ -291,26 +292,26 @@ proc constructLR1Automata(
           newKernal[symNext] = initHashSet[LR1Item]()
         newKernal[symNext].incl(newItem)
     for k, v in newKernal.pairs:
-      if kernalMap.hasKey(v):
-        s.goto[k] = kernalMap[v]
+      if kernelMap.hasKey(v):
+        s.goto[k] = kernelMap[v]
       else:
-        a.states.add(LR1State(kernal: v))
+        a.states.add(LR1State(kernel: v))
         s.goto[k] = a.states.high
-        kernalMap[v] = a.states.high
+        kernelMap[v] = a.states.high
 
   proc constructAction(curState: var LR1State, rulesMap: TableRef[string, int]) =
     proc tryAddAction(state: var LR1State, sym: Symbol, action: LR1Action) =
-      echo fmt"try add F[{state.kernal}, {sym}] <- {action}"
+      echo fmt"try add F[{state.kernel}, {sym}] <- {action}"
       if state.actions.hasKey(sym):
         let actionAlready = state.actions[sym]
         if not (actionAlready == action):
           raise newException(ValueError,
-            fmt"Conflict in LR(1) dectected between {actionAlready} " &
-            "and {action} for transition {sym} in state {state.kernal}")
+            fmt("Conflict in LR(1) dectected between {actionAlready} " &
+            "and {action} for transition {sym} in state {state.kernel}"))
       else:
         state.actions[sym] = action
     curState.actions = newTable[Symbol, LR1Action]()
-    for i in (curState.kernal + curState.closure):
+    for i in (curState.kernel + curState.closure):
       let
         r = rulesDesugared[i.rule]
         (symNext, _) = lookAhead(r.rhs[i.dot.p], i.dot.q)
@@ -330,7 +331,7 @@ proc constructLR1Automata(
                     output: Symbol(stype: sNonterminal, value: i.rule)))
   var
     initialState = LR1State(
-      kernal:
+      kernel:
         [(rule: "success", dot: (0, -1), lookahead: acceptSymbol)].toHashSet())
     i = 0
     map = newTable[string, int]()
@@ -446,9 +447,9 @@ proc run*(rules: var seq[SemanticRule]) : LR1Automata =
       tag = "tmpNode" & $id & "-"
       tmpName = tag & $r.expressionTree.id
 
-    echo r.lhs.value ,"'s bracketSequence: ", bracketSequence(r.expressionTree)
+    echo r.lhs.value ,"'s rhs parsed as tree: ", bracketSequence(r.expressionTree)
     DP(r.expressionTree, tag, rulesDesugared)
-    echo rulesDesugared
+    #echo rulesDesugared
     if r.expressionTree.meet != rnRewrite:
       rulesDesugared[r.lhs.value] = rulesDesugared[tmpName]
       #rulesDesugared[r.lhs.value].firstSetStatus = fsUncalculated
@@ -467,7 +468,7 @@ proc run*(rules: var seq[SemanticRule]) : LR1Automata =
   var a: LR1Automata
   constructLR1Automata(a, rulesDesugared)
   for k, s in a.states.pairs:
-    echo fmt"{k}: {s.kernal} | {s.closure}"
+    echo fmt"{k}: {s.kernel} | {s.closure}"
   for id, s in a.states.pairs:
     for k, v in s.goto:
       echo fmt"F[{id}][{k}] = {v}"

@@ -6,10 +6,10 @@ type
     value: char
 
 func isVariable(x : char) : bool =
-  ('a' <= x and x <= 'z') or ('A' <= x and x <= 'Z')
+  x in {'a'..'z', 'A'..'Z'}
 
 func isOperator(x : char) : bool =
-  x == '+' or x == '-' or x == '*' or x == '/' or x == '^' or x == '!'
+  x in {'+', '-', '*', '/', '^', '!'}
 
 func precedence(x : char) : int =
   assert isOperator(x)
@@ -22,19 +22,11 @@ func precedence(x : char) : int =
 
 func associtive(x : char) : int = # 1 for left to right, -1 for right to left
   assert isOperator(x)
-  case x:
-    of '+', '-', '*', '/': return 1
-    of '^': return -1
-    of '!': return 1
-    #unary operator should be eliminated before the next one appears
-    else: return 0
+  if x in {'+', '-', '*', '/', '!'}: 1 else: -1
 
 func unary(x : char) : bool = # Postfix unary operator
   assert isOperator(x)
-  case x:
-    of '!': return true
-    of '+', '-', '*', '/', '^': return false
-    else: return false
+  x in {'!'}
 
 
 proc postorder(x : node) =
@@ -82,7 +74,7 @@ for i in expression:
   for i in nodeStack:
     stdout.write(i.value, ", ")
   echo "]"
-echo "fin"
+echo "finish"
 
 postorder(nodeStack[^1])
 stdout.writeLine("")

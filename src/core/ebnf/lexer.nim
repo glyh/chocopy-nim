@@ -20,7 +20,7 @@ proc read(path: string) : seq[Token] =
           var success: bool = false
           for t, pattern in tokenPattern.items():
             let matchedLength = matchLen(line, pattern, p)
-            let ty = t
+            let ty = t # for runtime discriminator
             assert ty != ttAccept
             if matchedLength != -1:
               case ty:

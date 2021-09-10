@@ -68,6 +68,9 @@ type
     nullable*: bool
 
   RuleNestLevel* = enum
+    # Denote which level of regex has been touched in the syntax tree
+    # This is actually an optimization for constructing desugared rules,
+    # so that x -> a b c won't produce x -> y c, y -> a b
     rnNone = 0
     rnMeetConcat = 1
     rnMeetOr = 2
@@ -92,7 +95,7 @@ type
         message*: string
 
   LR1State* = ref object
-    kernal*: HashSet[LR1Item]
+    kernel*: HashSet[LR1Item]
     closure*: HashSet[LR1Item]
     goto*: TableRef[Symbol, int]
     actions*: TableRef[Symbol, LR1Action]
@@ -121,7 +124,7 @@ let
     ttProduce : re("->"),
     ttLBracket: re("\\("),
     ttRBracket: re("\\)"),
-    ttNewline: re("\n"),
+    ttNewline: re("\r?\n"),
     ttOperator: re("\\||\\?|\\*|\\+"),
     ttTerminal: re("\"(\\.|[^\"\\\\])*\"|[^ ]+")
     # terminal quoted by "", or anything can't be matched by other patterns
@@ -129,22 +132,22 @@ let
 
 template pos*(t: Token) : int =
   case t.ttype:
-      of ttAccept, ttNil: t.pos1
-      of ttTerminal, ttNonterminal, ttWords: t.pos2
-      else:
-        raise newException(
-          ValueError,
-          "Attempted to access a non existant field 'pos' for type Token")
+    of ttAccept, ttNil: t.pos1
+    of ttTerminal, ttNonterminal, ttWords: t.pos2
+    else:
+      raise newException(
+        ValueError,
+        "Attempted to access a non existant field 'pos' for type Token")
 
 template `pos=`*(t: Token, val: int) =
   case t.ttype:
-      of ttAccept, ttNil: t.pos1 = val
-      of ttTerminal, ttNonterminal, ttWords: t.pos2 = val
-      else:
-        raise newException(
-          ValueError,
-          fmt"Attempted to set a non existant" &
-          " field 'pos' for type Token(ttype: {t.ttype})")
+    of ttAccept, ttNil: t.pos1 = val
+    of ttTerminal, ttNonterminal, ttWords: t.pos2 = val
+    else:
+      raise newException(
+        ValueError,
+        fmt"Attempted to set a non existant" &
+        " field 'pos' for type Token(ttype: {t.ttype})")
 
 func `==`*(lhs: Symbol, rhs: Symbol): bool =
   lhs.stype == rhs.stype and
@@ -168,6 +171,7 @@ func `$`*(a: LR1Action): string =
 
 func `$`*(r: SemanticRuleDesugared): string =
   $(rhs: r.rhs)
+
 func `$`*(r: SemanticRule): string =
   $(lhs: r.lhs, rhs: r.rhs)
 
