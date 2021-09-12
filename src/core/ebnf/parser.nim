@@ -220,8 +220,8 @@ proc constructLR1Automata(
 
   proc constructClosure(s: var LR1State,
                        map: TableRef[string, int]) =
-    if s.closure.len != 0: return
-    var q: seq[LR1Item] = @[]
+    if s.closure.len != 0: return # constructed
+    var q: seq[LR1Item] = @[] # queue for bfs
 
     proc addItem(
       s: var LR1State,
@@ -301,13 +301,20 @@ proc constructLR1Automata(
 
   proc constructAction(curState: var LR1State, rulesMap: TableRef[string, int]) =
     proc tryAddAction(state: var LR1State, sym: Symbol, action: LR1Action) =
-      echo fmt"try add F[{state.kernel}, {sym}] <- {action}"
       if state.actions.hasKey(sym):
         let actionAlready = state.actions[sym]
         if not (actionAlready == action):
+          # if actionAlready.lraType == lr1Shift and action.lraType == lr1Reduce:
+          #   echo fmt("Overwrite shift with reduce for state {state.kernel} " &
+          #            "on lookahead {sym}")
+          #   state.actions[sym] = action
+          # elif actionAlready.lraType == lr1Reduce and
+          #      action.lraType == lr1Shift:
+          #   echo fmt("Ignore shift for state {state.kernel}")
+          # else:
           raise newException(ValueError,
             fmt("Conflict in LR(1) dectected between {actionAlready} " &
-            "and {action} for transition {sym} in state {state.kernel}"))
+            "and {action} for lookahead {sym} in state {state.kernel}"))
       else:
         state.actions[sym] = action
     curState.actions = newTable[Symbol, LR1Action]()
@@ -397,7 +404,7 @@ proc constructLR1Automata(
           (sym, j) = lookAhead(i, j)
         case sym.stype:
           of sNonterminal:
-            link1(map[sym.value], tFrom)
+            link1(map[sym.value], tFrom) # reversed edge
           of sTerminal:
             r.firstSet.incl(sym)
           else: discard
@@ -409,7 +416,8 @@ proc constructLR1Automata(
       firstSets[bel[id]] = firstSets[bel[id]] + rulesDesugared[rmap[id]].firstSet
       var e = head[id]
       while e != nil:
-        link2(bel[id], bel[e.to])
+        if bel[id] != bel[e.to]:
+          link2(bel[id], bel[e.to])
         e = e.next
     for id in 0..<p:
       if bel[id] == id and deg[id] == 0:
@@ -426,7 +434,7 @@ proc constructLR1Automata(
         e = e.next
     for id in 0..<p:
       rulesDesugared[rmap[id]].firstSet = firstSets[bel[id]]
-      echo fmt"firstSet[{rmap[id]}] = {rulesDesugared[rmap[id]].firstSet}"
+      #echo fmt"firstSet[{rmap[id]}] = {rulesDesugared[rmap[id]].firstSet}"
 
   constructFirstSets()
   a.states.add(initialState)
@@ -434,6 +442,7 @@ proc constructLR1Automata(
     var curState = a.states[i]
     constructClosure(curState, map)
     constructGoto(a, i)
+    #echo fmt "Goto [{i}, {curState.kernel} | {curState.closure}]:\n {curState.goto}"
     constructAction(curState, map)
     i += 1
 
@@ -447,7 +456,7 @@ proc run*(rules: var seq[SemanticRule]) : LR1Automata =
       tag = "tmpNode" & $id & "-"
       tmpName = tag & $r.expressionTree.id
 
-    echo r.lhs.value ,"'s rhs parsed as tree: ", bracketSequence(r.expressionTree)
+    #echo r.lhs.value ,"'s rhs parsed as tree: ", bracketSequence(r.expressionTree)
     DP(r.expressionTree, tag, rulesDesugared)
     #echo rulesDesugared
     if r.expressionTree.meet != rnRewrite:
@@ -461,9 +470,9 @@ proc run*(rules: var seq[SemanticRule]) : LR1Automata =
           rhs: @[@[Symbol(stype: sNonterminal, value: tmpName)]],
           nullable: rulesDesugared[tmpName].nullable)
     id += 1
-  echo "--------------------------------------------------------"
-  echo "rulesDesugared: ", rulesDesugared
-  echo "--------------------------------------------------------"
+  #echo "--------------------------------------------------------"
+  #echo "rulesDesugared: ", rulesDesugared
+  #echo "--------------------------------------------------------"
 
   var a: LR1Automata
   constructLR1Automata(a, rulesDesugared)
