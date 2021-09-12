@@ -7,7 +7,7 @@
 # guranteeing the automata works.
 
 # Keywords to treated as primitive:
-# NEWLINE, INDENT, DEDENT, INTEGER, ID, IDSTRING, STRING
+# NEWLINE, INDENT, DEDENT, INTEGER, ID, STRING
 
 program -> ( var_def | func_def | class_def )* stmt*
 class_def -> class ID "(" ID ")" : NEWLINE INDENT class_body DEDENT
@@ -16,37 +16,34 @@ func_def -> def ID "(" typed_var ( , typed_var )* ")" ( "->" type )? : NEWLINE
   INDENT func_body DEDENT
 func_body -> ( global_decl | nonlocal_decl | var_def | func_def )* stmt+
 typed_var -> ID : type
-type -> ID | IDSTRING | [ type ]
+type -> ID | [ type ]
 global_decl -> global ID NEWLINE
 nonlocal_decl -> nonlocal ID NEWLINE
 var_def -> typed_var = literal NEWLINE
 stmt -> simple_stmt NEWLINE
-  | if expr : block ( elif expr : block )* ( else : block )?
-  | while expr : block
-  | for ID in expr : block
+  | if expr ":" block ( elif expr : block )* ( else : block )?
+  | while expr ":" block
+  | for ID in expr ":" block
 simple_stmt -> pass
   | expr
   | return expr?
   | ( target = )+ expr
 block -> NEWLINE INDENT ( stmt )+ DEDENT
-literal -> None | True | False | INTEGER | IDSTRING | STRING
-expr -> cexpr
-  | not expr
-  | expr ( and | or ) expr
-  | expr if expr else expr
-cexpr -> ID # WTF
-  | literal
-  | [ ( expr ( , expr )* )? ]
-  | "(" expr ")"
-  | member_expr
-  | index_expr
-  | member_expr "(" ( expr ( , expr )* )? ")"
-  | ID "(" ( expr ( , expr )* )? ")"
-  | cexpr bin_op cexpr
-  | - cexpr
-bin_op -> "+" | - | "*" | // | % | == | != | <= | >= | < | > | is
-member_expr -> cexpr . ID
-index_expr -> cexpr [ expr ]
-target -> ID
-  | member_expr
-  | index_expr
+literal -> None | True | False | INTEGER | ID | STRING
+
+expr -> expr_tier1
+
+expr_tier1 -> expr_tier2 | expr_tier2 if expr_tier1 else expr_tier1
+expr_tier2 -> expr_tier3 | expr_tier2 or expr_tier3
+expr_tier3 -> expr_tier4 | expr_tier3 and expr_tier4
+expr_tier4 -> expr_tier5 | not expr_tier4
+expr_tier5 -> expr_tire6 | expr_tier5 relation_operator expr_tier6
+expr_tier6 -> expr_tire7 | expr_tier7 additive_operator expr_tier6
+expr_tier7 -> expr_tier8 | expr_tier8 multiplicative_operator expr_tier7
+expr_tier8 -> expr_tier9 | '-' expr_tier8
+expr_tier9 -> expr_tier10 | expr_tier9 '.' ID | expr_tier9 '[' ID ']'
+expr_tier10 -> '(' expr_tier1 ')' | literal
+
+relation_operator -> "==" | "!=" | "<" | ">" | "<=" | ">=" | is
+additive_operator -> "+" | "-"
+multiplicative_operator -> "*" | "//" | "%"
