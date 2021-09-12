@@ -76,6 +76,10 @@ type
     rnMeetOr = 2
     rnRewrite = 3
 
+  SyntaxNodeType* = enum
+    snLeaf
+    snInner
+
   Node* = ref object
     left*, right*: Node
     value*: Token
@@ -103,6 +107,13 @@ type
 
   LR1Automata* = object
     states*: seq[LR1State]
+
+  SyntaxNode* = ref object
+    case nodeType* : SyntaxNodeType:
+      of snLeaf:
+        value*: string
+      of snInner:
+        childrens*: seq[SyntaxNode]
 
 const
   opPrecedence* :Table[OperatorType, int] = { opOr: 1,
