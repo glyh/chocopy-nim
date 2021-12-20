@@ -100,6 +100,7 @@ proc DP(
             else:
               raise newException(FieldDefect, "Impossible")]],
         nullable: t.value.ttype == ttNil)
+        # FIXME:Need topo-sort to solve nullable passing between nonterminals
       t.meet = rnNone
     of ttOperator:
       if t.right == nil:
@@ -112,7 +113,7 @@ proc DP(
           if t.right == nil: ""
           else: tag & $t.right.id
         rLeft = rulesDesugared[idLeft]
-        rRight = if idRight == "": rLeft else: rulesDesugared[idRight]
+        rRight = if t.right == nil: rLeft else: rulesDesugared[idRight]
       case t.value.otype:
         of opOr:
           if t.meet == rnRewrite:
@@ -211,17 +212,11 @@ proc constructLR1Automata(
     var pos = pos + 1
     while pos <= r.high and r[pos].stype == sNil:
       pos += 1
-    ((if pos > r.high:
-      acceptSymbol
-    else:
-      r[pos]),
-    pos)
+    ((if pos > r.high: acceptSymbol else: r[pos]), pos)
 
-
-  proc constructClosure(s: var LR1State,
-                       map: TableRef[string, int]) =
+  proc constructClosure(s: var LR1State, map: TableRef[string, int]) =
     if s.closure.len != 0: return # constructed
-    var q: seq[LR1Item] = @[] # queue for bfs
+    var q: seq[LR1Item] = @[] # queue for BFS
 
     proc addItem(
       s: var LR1State,
@@ -252,6 +247,7 @@ proc constructLR1Automata(
           betaFirstSet = initHashSet[Symbol]()
           # Actually is the firstSet of "beta a"
         # beta's first symbol
+        # FIXME: add Accept if the last terminal is nullable.
         while betaX.stype == sNonterminal:
           let rBetaX = rulesDesugared[betaX.value]
           if not rBetaX.nullable: break
@@ -304,17 +300,16 @@ proc constructLR1Automata(
       if state.actions.hasKey(sym):
         let actionAlready = state.actions[sym]
         if not (actionAlready == action):
-          # if actionAlready.lraType == lr1Shift and action.lraType == lr1Reduce:
-          #   echo fmt("Overwrite shift with reduce for state {state.kernel} " &
-          #            "on lookahead {sym}")
-          #   state.actions[sym] = action
-          # elif actionAlready.lraType == lr1Reduce and
-          #      action.lraType == lr1Shift:
-          #   echo fmt("Ignore shift for state {state.kernel}")
-          # else:
-          raise newException(ValueError,
-            fmt("Conflict in LR(1) dectected between {actionAlready} " &
-            "and {action} for lookahead {sym} in state {state.kernel}"))
+          if actionAlready.lraType == lr1Shift and action.lraType == lr1Reduce:
+            echo fmt("Overwrite shift with reduce for state {state.kernel} " &
+                     "on lookahead {sym}")
+            state.actions[sym] = action
+          elif actionAlready.lraType == lr1Reduce and
+               action.lraType == lr1Shift:
+            echo fmt("Ignore shift for state {state.kernel}")
+          # raise newException(ValueError,
+          #   fmt("Conflict in LR(1) dectected between {actionAlready} " &
+          #   "and {action} for lookahead {sym} in state {state.kernel}"))
       else:
         state.actions[sym] = action
     curState.actions = newTable[Symbol, LR1Action]()
@@ -348,6 +343,54 @@ proc constructLR1Automata(
     map[k] = p
     rmap[p] = k
     p += 1
+
+  # Fix up nullable passing between nonterminals.
+  # Here I don't deal with looping nonterminals, because they are generally
+  # useless.
+  proc constructNullable() =
+    var record = newTable[string, seq[int]]()
+    var corecord = newTable[string, seq[tuple[name: string, which: int]]]()
+    for k, r in rulesDesugared.mpairs:
+      record[k] = @[]
+      if r.nullable: continue
+      for pos, rhs_cur in r.rhs.pairs:
+        var cnt = 0
+        for sym in rhs_cur:
+          if sym.stype != sNil: cnt += 1
+          # Add for Nonterminals that are possible to be nil and symbols that
+          # can't be nil. We reduce this cnt afterwards, so that when we know
+          # that all nonterminals this clause contains can be nil, and there's
+          # no other non-nil variables, then k is nullable
+          if sym.stype == sNonterminal:
+            if corecord.hasKey(sym.value):
+              corecord[sym.value].add((name: k, which: pos))
+            else:
+              corecord[sym.value] = @[(name: k, which: pos)]
+        record[k].add(cnt)
+        # echo k, pos ,":", cnt
+    #echo rulesDesugared["S"].nullable , "!"
+
+    var queue = initDeque[string]()
+    for k, r in rulesDesugared.pairs:
+      if r.nullable and corecord.hasKey(k):
+        for p in corecord[k]:
+          record[p.name][p.which] -= 1
+          # if p.name == "S":
+          #   echo "Reduce s from", k
+          if record[p.name][p.which] == 0 and
+             not rulesDesugared[p.name].nullable:
+            rulesDesugared[p.name].nullable = true
+            queue.addLast(p.name)
+        corecord.del(k)
+    while queue.len != 0:
+      let head = queue.popFirst()
+      if corecord.hasKey(head):
+        for p in corecord[head]:
+          record[p.name][p.which] -= 1
+          if record[p.name][p.which] == 0 and
+             not rulesDesugared[p.name].nullable:
+            rulesDesugared[p.name].nullable = true
+            queue.addLast(p.name)
 
   # Using tarjan's algorithm to solve firstSet with left recursion
   proc constructFirstSets() =
@@ -434,8 +477,12 @@ proc constructLR1Automata(
         e = e.next
     for id in 0..<p:
       rulesDesugared[rmap[id]].firstSet = firstSets[bel[id]]
-      #echo fmt"firstSet[{rmap[id]}] = {rulesDesugared[rmap[id]].firstSet}"
+      # echo fmt"firstSet[{rmap[id]}] = {rulesDesugared[rmap[id]].firstSet}"
 
+  constructNullable()
+  echo "--------------------------------------------------------"
+  echo "rulesDesugared: ", rulesDesugared
+  echo "--------------------------------------------------------"
   constructFirstSets()
   a.states.add(initialState)
   while i <= a.states.high:
@@ -447,6 +494,11 @@ proc constructLR1Automata(
     i += 1
 
 proc run*(rules: var seq[SemanticRule]) : LR1Automata =
+
+  # echo "--------------------------------------------------------"
+  # echo "rules_initially: ", rules
+  # echo "--------------------------------------------------------"
+
   var
     id = 1
     rulesDesugared = newTable[string, SemanticRuleDesugared]()
@@ -470,12 +522,11 @@ proc run*(rules: var seq[SemanticRule]) : LR1Automata =
           rhs: @[@[Symbol(stype: sNonterminal, value: tmpName)]],
           nullable: rulesDesugared[tmpName].nullable)
     id += 1
-  #echo "--------------------------------------------------------"
-  #echo "rulesDesugared: ", rulesDesugared
-  #echo "--------------------------------------------------------"
+
 
   var a: LR1Automata
   constructLR1Automata(a, rulesDesugared)
+
   for k, s in a.states.pairs:
     echo fmt"{k}: {s.kernel} | {s.closure}"
   for id, s in a.states.pairs:
@@ -483,4 +534,5 @@ proc run*(rules: var seq[SemanticRule]) : LR1Automata =
       echo fmt"F[{id}][{k}] = {v}"
     for k,v in s.actions:
       echo fmt"Action[{id}][{k}] = {v}"
+
   a
