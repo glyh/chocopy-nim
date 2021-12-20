@@ -130,8 +130,8 @@ let
   tokenPattern* = {
     ttWhiteSpace: re("( |\t)+"),
     ttCommentHead: re("#"),
-    ttNil: re("(?<![A-Za-z_])nil(?![A-Za-z_])"),
-    ttWords: re("[A-Za-z_]+"),
+    ttNil: re("(?<![A-Za-z_0-9])nil(?![A-Za-z_0-9])"),
+    ttWords: re("[A-Za-z_0-9]+"),
     ttProduce : re("->"),
     ttLBracket: re("\\("),
     ttRBracket: re("\\)"),
@@ -181,7 +181,7 @@ func `$`*(a: LR1Action): string =
     of lr1Error: fmt"[{a.lraType}, errorMessage: {a.message}]"
 
 func `$`*(r: SemanticRuleDesugared): string =
-  $(rhs: r.rhs)
+  $(rhs: r.rhs#[, nullable: r.nullable]#)
 
 func `$`*(r: SemanticRule): string =
   $(lhs: r.lhs, rhs: r.rhs)
