@@ -3,7 +3,7 @@ import definition
 
 var logger = newConsoleLogger()
 
-proc scan(path: string) : seq[ChoToken] =
+proc scan*(path: string) : seq[ChoToken] =
   if fileExists(path):
     var s = newFileStream(path, fmRead)
     defer: close(s)
