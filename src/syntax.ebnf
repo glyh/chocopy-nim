@@ -15,21 +15,22 @@ class_body -> pass NEWLINE | ( var_def | class_def )+
 func_def -> def ID "(" typed_var ( , typed_var )* ")" ( "->" type )? : NEWLINE
   INDENT func_body DEDENT
 func_body -> ( global_decl | nonlocal_decl | var_def | func_def )* stmt+
-typed_var -> ID : type
-type -> ID | [ type ]
+typed_var -> ID ":" type
+type -> ID | "[" type "]"
 global_decl -> global ID NEWLINE
 nonlocal_decl -> nonlocal ID NEWLINE
 var_def -> typed_var = literal NEWLINE
 stmt -> simple_stmt NEWLINE
-  | if expr ":" block ( elif expr : block )* ( else : block )?
+  | if expr ":" block ( elif expr ":" block )* ( else ":" block )?
   | while expr ":" block
   | for ID in expr ":" block
 simple_stmt -> pass
   | expr
   | return expr?
-  | ( target = )+ expr
+  | ( ID = )+ expr
 block -> NEWLINE INDENT ( stmt )+ DEDENT
 literal -> None | True | False | INTEGER | ID | STRING
+target -> ID
 
 expr -> expr_tier1
 
