@@ -1,19 +1,19 @@
-expr -> expr_tier1
+expr -> tier1
 
-expr_tier1 -> expr_tier2 | expr_tier2 if expr_tier1 else expr_tier1
-expr_tier2 -> expr_tier3 | expr_tier2 or expr_tier3
-expr_tier3 -> expr_tier4 | expr_tier3 and expr_tier4
-expr_tier4 -> expr_tier5 | not expr_tier4
-expr_tier5 -> expr_tire6 | expr_tier5 relation_operator expr_tier6
-expr_tier6 -> expr_tire7 | expr_tier7 additive_operator expr_tier6
-expr_tier7 -> expr_tier8 | expr_tier8 multiplicative_operator expr_tier7
-expr_tier8 -> expr_tier9 | '-' expr_tier8
-expr_tier9 -> expr_tier10 | expr_tier9 '.' ID | expr_tier9 '[' ID ']'
-expr_tier10 -> '(' expr_tier1 ')' | literal
+tier1 -> tier2 | tier2 i tier1 e tier1
+tier2 -> tier3 | tier2 o tier3
+tier3 -> tier4 | tier3 a tier4
+tier4 -> tier5 | n tier4
+tier5 -> tier6 | tier5 relation_operator tier6
+tier6 -> tier7 | tier7 additive_operator tier6
+tier7 -> tier8 | tier8 multiplicative_operator tier7
+tier8 -> tier9 | "-" tier8
+tier9 -> tier10 | tier9 "." ID | tier9 "[" ID "]"
+tier10 -> "(" tier1 ")" | literal
 
-relation_operator -> "==" | "!=" | "<" | ">" | "<=" | ">=" | is
+relation_operator -> "=" | "<" | ">"
 additive_operator -> "+" | "-"
 multiplicative_operator -> "*" | "//" | "%"
 
 literal -> ID
-ID -> 'x'
+ID -> "x"
