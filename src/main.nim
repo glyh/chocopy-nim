@@ -8,7 +8,7 @@ if os.paramCount() >= 1:
     of "ebnf":
       ebnf.run()
     of "parser":
-      parser.run()
+      parser.parse(paramStr(2))
     of "paramTest":
       echo "paramCount: ", paramCount()
       for i in 0..paramCount():
