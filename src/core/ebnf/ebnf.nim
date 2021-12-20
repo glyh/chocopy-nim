@@ -1,4 +1,4 @@
-import os, tables, streams, logging, tables, sets, strformat
+import os, tables, streams, logging, strformat
 import definition, lexer, parser
 export SymbolType, Symbol, LR1ActionType, LR1Action, LR1State, LR1Automata
 
