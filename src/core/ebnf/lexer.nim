@@ -65,7 +65,7 @@ proc preprocess(tokens: seq[Token]) : seq[Token] =
     case tokens[i].ttype:
       of ttNewline:
         if not meetProduction:
-          tokens.delete(i, i)
+          tokens.delete(i..i)
         meetProduction = false
       of ttProduce:
         meetProduction = true
